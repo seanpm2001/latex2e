@@ -8082,8 +8082,8 @@
 \cs_new:Npn \__clist_remove_all:
   { \exp_after:wN \__clist_remove_all:w \__clist_tmp:w , }
 \cs_new:Npn \__clist_remove_all:w #1 , \s__clist_mark , #2 , { \exp_not:n {#1} }
-\cs_generate_variant:Nn \clist_remove_all:Nn  { c }
-\cs_generate_variant:Nn \clist_gremove_all:Nn { c }
+\cs_generate_variant:Nn \clist_remove_all:Nn  { c , NV , cV }
+\cs_generate_variant:Nn \clist_gremove_all:Nn { c , NV , cV }
 \cs_new_protected:Npn \clist_reverse:N #1
   { \__kernel_tl_set:Nx #1 { \exp_args:No \clist_reverse:n {#1} } }
 \cs_new_protected:Npn \clist_greverse:N #1
@@ -12969,7 +12969,7 @@
 \str_const:Nn \c__keys_groups_root_str   { key~groups~>~ }
 \str_const:Nn \c__keys_inherit_root_str  { key~inherit~>~ }
 \str_const:Nn \c__keys_type_root_str     { key~type~>~ }
-\str_const:Nn \c__keys_validate_root_str { key~validate~>~ }
+\str_const:Nn \c__keys_check_root_str    { key~check~>~ }
 \str_const:Nn \c__keys_props_root_str { key~prop~>~ }
 \int_new:N \l_keys_choice_int
 \tl_new:N \l_keys_choice_tl
@@ -12993,6 +12993,8 @@
 \bool_new:N \l__keys_tmp_bool
 \tl_new:N \l__keys_tmpa_tl
 \tl_new:N \l__keys_tmpb_tl
+\prop_new:N \l_keys_usage_load_prop
+\prop_new:N \l_keys_usage_preamble_prop
 \scan_new:N \s__keys_nil
 \scan_new:N \s__keys_mark
 \scan_new:N \s__keys_stop
@@ -13259,7 +13261,7 @@
 \cs_new_protected:Npn \__keys_undefine:
   {
     \clist_map_inline:nn
-      { code , default , groups , inherit , type , validate }
+      { code , default , groups , inherit , type , check }
       {
         \cs_set_eq:cN
           { \tl_use:c { c__keys_ ##1 _root_str } \l_keys_path_str }
@@ -13273,17 +13275,17 @@
         { true }
           {
             \cs_set_eq:cc
-              { \c__keys_validate_root_str \l_keys_path_str }
-              { __keys_validate_ #1 : }
+              { \c__keys_check_root_str \l_keys_path_str }
+              { __keys_check_ #1 : }
           }
         { false }
           {
             \cs_if_eq:ccT
-              { \c__keys_validate_root_str \l_keys_path_str }
-              { __keys_validate_ #1 : }
+              { \c__keys_check_root_str \l_keys_path_str }
+              { __keys_check_ #1 : }
               {
                 \cs_set_eq:cN
-                  { \c__keys_validate_root_str \l_keys_path_str }
+                  { \c__keys_check_root_str \l_keys_path_str }
                   \tex_undefined:D
               }
           }
@@ -13294,7 +13296,7 @@
           { .value_ #1 :n }
       }
   }
-\cs_new_protected:Npn \__keys_validate_forbidden:
+\cs_new_protected:Npn \__keys_check_forbidden:
   {
     \bool_if:NF \l__keys_no_value_bool
       {
@@ -13303,7 +13305,7 @@
         \use_none:nnn
       }
   }
-\cs_new_protected:Npn \__keys_validate_required:
+\cs_new_protected:Npn \__keys_check_required:
   {
     \bool_if:NT \l__keys_no_value_bool
       {
@@ -13312,6 +13314,52 @@
         \use_none:nnn
       }
   }
+\cs_new_protected:Npn \__keys_usage:n #1
+  {
+    \str_case:nnF {#1}
+      {
+        { general }
+          {
+            \__keys_usage:NN \l_keys_usage_load_prop
+              \c_false_bool
+            \__keys_usage:NN \l_keys_usage_preamble_prop
+              \c_false_bool
+          }
+        { load }
+          {
+            \__keys_usage:NN \l_keys_usage_load_prop
+              \c_true_bool
+            \__keys_usage:NN \l_keys_usage_preamble_prop
+              \c_false_bool
+          }
+        { preamble }
+          {
+            \__keys_usage:NN \l_keys_usage_load_prop
+              \c_false_bool
+            \__keys_usage:NN \l_keys_usage_preamble_prop
+              \c_true_bool
+          }
+      }
+      {
+        \msg_error:nnnn { keys }
+          { choice-unknown }
+          { .usage:n }
+          {#1}
+      }
+  }
+\cs_new_protected:Npn \__keys_usage:NN #1#2
+  {
+    \prop_get:NVNF #1 \l__keys_module_str \l__keys_tmpa_tl
+      { \tl_clear:N \l__keys_tmpa_tl }
+    \tl_set:Nx \l__keys_tmpb_tl
+      { \exp_after:wN \__keys_usage:w \l_keys_path_str \s__keys_stop }
+    \bool_if:NTF #2
+      { \clist_put_right:NV \l__keys_tmpa_tl \l__keys_tmpb_tl }
+      { \clist_remove_all:NV \l__keys_tmpa_tl \l__keys_tmpb_tl }
+    \prop_put:NVV #1 \l__keys_module_str
+      \l__keys_tmpa_tl
+  }
+\cs_new:Npn \__keys_usage:w #1 / #2 \s__keys_stop {#2}
 \cs_new_protected:Npn \__keys_variable_set:NnnN #1#2#3#4
   {
     \use:c { #2_if_exist:NF } #1 { \use:c { #2 _new:N } #1 }
@@ -13505,10 +13553,28 @@
   { \__keys_variable_set:cnnN {#1} { tl } { g } x }
 \cs_new_protected:cpn { \c__keys_props_root_str .undefine: }
   { \__keys_undefine: }
+\cs_new_protected:cpn { \c__keys_props_root_str .usage:n } #1
+  { \__keys_usage:n {#1} }
 \cs_new_protected:cpn { \c__keys_props_root_str .value_forbidden:n } #1
   { \__keys_value_requirement:nn { forbidden } {#1} }
 \cs_new_protected:cpn { \c__keys_props_root_str .value_required:n } #1
   { \__keys_value_requirement:nn { required } {#1} }
+\group_begin:
+  \cs_set_protected:Npn \__keys_tmp:nn #1#2
+    {
+      \quark_if_recursion_tail_stop:n {#1}
+      \cs_new_eq:cc
+        { \c__keys_props_root_str . #2 }
+        { \c__keys_props_root_str . #1 }
+      \__keys_tmp:nn
+    }
+  \__keys_tmp:nn
+    { legacy_if:n } { if }
+    { tl_set:N }    { store }
+    { usage:n }     { usage }
+    { \q_recursion_tail } { }
+    \q_recursion_stop
+\group_end:
 \cs_new_protected:Npn \keys_set:nn #1#2
   {
     \use:x
@@ -13784,7 +13850,7 @@
   {
     \cs_if_exist:cTF { \c__keys_code_root_str \l_keys_path_str }
       {
-        \cs_if_exist_use:c { \c__keys_validate_root_str \l_keys_path_str }
+        \cs_if_exist_use:c { \c__keys_check_root_str \l_keys_path_str }
         \__keys_execute:no \l_keys_path_str \l_keys_value_tl
       }
       {
@@ -13803,7 +13869,7 @@
           { \c__keys_code_root_str ##1 / \l_keys_key_str }
           {
             \str_set:Nn \l__keys_inherit_str {##1}
-            \cs_if_exist_use:c { \c__keys_validate_root_str ##1 / \l_keys_key_str }
+            \cs_if_exist_use:c { \c__keys_check_root_str ##1 / \l_keys_key_str }
             \__keys_execute:no { ##1 / \l_keys_key_str } \l_keys_value_tl
             \clist_map_break:n \use_none:n
           }
@@ -13968,6 +14034,7 @@
       { \prg_return_true: }
       { \prg_return_false: }
   }
+\prg_generate_conditional_variant:Nnn \keys_if_exist:nn { nx } { T , F , TF }
 \prg_new_conditional:Npnn \keys_if_choice_exist:nnn #1#2#3
   { p , T , F , TF }
   {
